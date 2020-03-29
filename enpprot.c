@@ -3,12 +3,17 @@
  ****************************************************************************/
 #include "enpprot.h"
 #include "smpprot.h"
+#include "stdbool.h"
 
 // Пакеты переменных
 static ENP_Pack_t *ENP_Pack = 0;
 
 // Чтение слова
 uint16_t ENP_ReadWord(char *buf) {
+  return (uint16_t)buf[0] + ((uint16_t)buf[1] << 8);
+}
+
+static uint16_t Read16(uint8_t *buf) {
   return (uint16_t)buf[0] + ((uint16_t)buf[1] << 8);
 }
 
@@ -22,6 +27,18 @@ uint32_t ENP_ReadDoubleWord(char *buf) {
 void ENP_WriteWord(char *buf, uint16_t word) {
   *buf++ = word & 0xFF;
   *buf = word >> 8;
+}
+
+static void Write16(uint8_t *buf, uint16_t value) {
+  *buf++ = value & 0xFF;
+  *buf = value >> 8;
+}
+
+static void Write32(uint8_t *buf, uint32_t value) {
+  *buf++ = value & 0xFF;
+  *buf++ = (value >> 8) & 0xFF;
+  *buf++ = (value >> 16) & 0xFF;
+  *buf = (value >> 24) & 0xFF;
 }
 
 // Запись двойного слова
@@ -441,6 +458,239 @@ void ENP_Proc(ENP_Handle_t *handle) {
 
       handle->rxLen = i;
       break;
+    }
+  }
+}
+
+static uint16_t CalcFrameCrc(enpFrame_t const *const frame) {
+  uint16_t crc = 0xFFFF;
+  crc = CRC16(&frame->sync1, 1, crc, 1);
+  crc = CRC16(&frame->sync2, 1, crc, 1);
+  crc = CRC16(&frame->id, 2, crc, 1);
+  crc = CRC16(&frame->len, 1, crc, 1);
+  crc = CRC16(&frame->cmd, 1, crc, 1);
+  if (frame->len > 1) {
+    crc = CRC16(frame->data, frame->len - 1, crc, 1);
+  }
+  return crc;
+}
+
+bool ENP_ParseFrame(ENP_Handle_t *handle, uint8_t *data, uint32_t len) {
+  enpFrameState_t *state = &handle->rxFrameState;
+  enpFrame_t *frame = &handle->rxFrame;
+  uint16_t calcedCrc = 0;
+  bool isFrameParsed = false;
+
+  for (int i = 0; i < len; i++) {
+    switch (state->stage) {
+    case ENP_PROT_STAGE_SYNC1:
+      if (data[i] == 0xFA) {
+        frame->sync1 = data[i];
+        state->stage = ENP_PROT_STAGE_SYNC2;
+      }
+      break;
+    case ENP_PROT_STAGE_SYNC2:
+      if (data[i] == 0xCE) {
+        frame->sync2 = data[i];
+        state->stage = ENP_PROT_STAGE_ID1;
+      } else { // restart and try again
+        state->stage = ENP_PROT_STAGE_SYNC1;
+      }
+      break;
+    case ENP_PROT_STAGE_ID1:
+      frame->id = data[i];
+      state->stage = ENP_PROT_STAGE_ID2;
+      break;
+    case ENP_PROT_STAGE_ID2:
+      frame->id = (data[i] << 8) | frame->id;
+      state->stage = ENP_PROT_STAGE_LEN;
+      break;
+    case ENP_PROT_STAGE_LEN: // lenght
+      frame->len = data[i];
+      state->stage = ENP_PROT_STAGE_CMD;
+      break;
+    case ENP_PROT_STAGE_CMD:
+      frame->cmd = data[i];
+      if (frame->len == 1) {
+        // no payload in frame
+        state->stage = ENP_PROT_STAGE_CRC1;
+      } else {
+        state->stage = ENP_PROT_STAGE_PAYLOAD;
+        state->payloadIndex = 0;
+      }
+      break;
+    case ENP_PROT_STAGE_PAYLOAD: // payload
+      frame->data[state->payloadIndex] = data[i];
+      state->payloadIndex++;
+      // minus code from lenght
+      if (state->payloadIndex >= frame->len - 1) {
+        state->stage = ENP_PROT_STAGE_CRC1;
+      }
+      break;
+    case ENP_PROT_STAGE_CRC1: // checksum
+      frame->crc = data[i];
+      state->stage = ENP_PROT_STAGE_CRC2;
+      break;
+    case ENP_PROT_STAGE_CRC2: // checksum
+      // calculate message crc
+      frame->crc = (data[i] << 8) | frame->crc;
+      calcedCrc = CalcFrameCrc(frame);
+      if (frame->crc == calcedCrc) {
+        isFrameParsed = true;
+      }
+      state->stage = ENP_PROT_STAGE_SYNC1;
+      break;
+
+    default:
+      state->stage = ENP_PROT_STAGE_SYNC1;
+      break;
+    }
+  }
+  return isFrameParsed;
+}
+
+void ENP_Parse(ENP_Handle_t *handle) {
+  uint16_t id, prop;
+  uint32_t value;
+  const ENP_Node_t *node;
+  int i, j, n;
+  bool isFrameParsed = false;
+  uint8_t varIndex = 0;
+  enpFrame_t *txFrame = &handle->txFrame;
+  enpFrame_t *rxFrame = &handle->rxFrame;
+  // char* txBuff = handle->txBuf;
+
+  // if frame was parsed. preparation of an answer
+  if (isFrameParsed) {
+    // command handler
+    switch (rxFrame->cmd) {
+    // get number of nodes
+    case ENP_CMD_GETNODENUM:
+      Write16(&txFrame->data[0], ENP_NodeNum);
+      txFrame->len = 3;
+      break;
+
+    // get node description
+    case ENP_CMD_GETNODEDESCR:
+      n = Read16(&rxFrame->data[0]); // node number
+      if (n < ENP_NodeNum) {
+        Write16(&txFrame->data[0], n);
+        Write16(&txFrame->data[2], ENP_NodeList[n]->id);
+        Write16(&txFrame->data[4], ENP_NodeList[n]->pid);
+        Write16(&txFrame->data[6], ENP_NodeList[n]->varNum);
+        // TODO strings
+        if (ENP_NodeList[n]->NodeGetName) {
+          ENP_NodeList[n]->NodeGetName(ENP_NodeList[n]->id,
+                                       (char *)&txFrame->data[8]);
+        } else {
+          // txbuf[len] = 0;
+        }
+        // ищем конец описания переменной
+        // while (txbuf[len++]) {
+        // }
+      } else {
+        txFrame->cmd |= ENP_CMD_ERROR;
+        txFrame->data[0] = ENP_ERROR_NODEID;
+      }
+      break;
+
+    // get description of variable
+    case ENP_CMD_GETVARDESCR:
+      id = Read16(&rxFrame->data[0]);
+      n = Read16(&rxFrame->data[2]); // variable number
+      node = ENP_FindNode(id);
+      if (node) {
+        // TODO variable name
+        // if (node->VarGetAttr(id, n, txbuf + 12, &prop) == ENP_ERROR_NONE) {
+        Write16(&txFrame->data[0], id);
+        Write16(&txFrame->data[2], n);
+        Write16(&txFrame->data[4], prop);
+        txFrame->len = 7;
+        //} else {
+        // txFrame->cmd |= ENP_CMD_ERROR;
+        // txFrame->data[0] = ENP_ERROR_VARID;
+        // txFrame->len = 2;
+        //}
+      } else {
+        txFrame->cmd |= ENP_CMD_ERROR;
+        txFrame->data[0] = ENP_ERROR_NODEID;
+        txFrame->len = 2;
+      }
+      break;
+
+    // get variable value
+    case ENP_CMD_GETVARS:
+      id = Read16(&rxFrame->data[0]);
+      i = Read16(&rxFrame->data[2]); // first variable number
+      n = Read16(&rxFrame->data[4]); // number of variables
+      node = ENP_FindNode(id);
+      if (node) {
+        varIndex = 6; // id, first variable and count of variables
+        for (j = 0; j < n; j++, i++) {
+          if (node->VarGetVal &&
+              node->VarGetVal(id, i, &value) == ENP_ERROR_NONE) {
+            // записываем значение переменной
+            Write32(&rxFrame->data[varIndex], value);
+            varIndex += 4;
+            if (varIndex >= ENP_PAYLOAD_MAX_SIZE) {
+              break;
+            }
+          } else {
+            break;
+          }
+        }
+        Write16(&txFrame->data[0], id);
+        Write16(&txFrame->data[2], i);
+        Write16(&txFrame->data[4], j);
+      } else {
+        txFrame->cmd |= ENP_CMD_ERROR; // ошибка - неверный идентификатор узла
+        txFrame->data[0] = ENP_ERROR_NODEID;
+        txFrame->len = 2;
+      }
+      break;
+
+    // set variable value
+    case ENP_CMD_SETVARS:
+      id = Read16(&rxFrame->data[0]);
+      i = Read16(&rxFrame->data[2]); // first variable number
+      n = Read16(&rxFrame->data[4]); // number of variables
+      node = ENP_FindNode(id);
+      if (node) {
+        // TODO
+        for (j = 0; j < n; j++, i++) {
+          // value = ENP_ReadDoubleWord(rxbuf + pos + 12 + (j << 2));
+          if (node->VarSetVal(id, i, &value) == ENP_ERROR_NONE &&
+              node->VarSetVal) {
+          } else {
+            break;
+          }
+        }
+        Write16(&rxFrame->data[0], id);
+        Write16(&rxFrame->data[2], i);
+        Write16(&rxFrame->data[4], j);
+      } else {
+        rxFrame->cmd |= ENP_CMD_ERROR;
+        rxFrame->data[0] = ENP_ERROR_NODEID;
+        rxFrame->len = 2;
+      }
+      break;
+
+    // Unknown command
+    default:
+      // TODO error pack func
+      rxFrame->cmd |= ENP_CMD_ERROR;
+      rxFrame->data[0] = ENP_ERROR_COMMAND;
+      rxFrame->len = 2;
+      break;
+    }
+    // записываем контрольную сумму
+    // ENP_WriteWord(txbuf + len, CRC16(txbuf, len, 0xFFFF, 1));
+
+    txFrame->crc = CalcFrameCrc(txFrame);
+    // memset(txBuff, 0, sizeof(ENP_BUFFSIZE));
+
+    if (handle->TxFun(handle->txBuf, handle->txLen)) {
+      handle->txLen = 0;
     }
   }
 }

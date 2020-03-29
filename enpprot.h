@@ -4,6 +4,7 @@
 #ifndef ENPPROT_H_
 #define ENPPROT_H_
 #include "enpapi.h"
+#include "stdbool.h"
 
 // Размер буферов приёма-передачи
 #define ENP_BUFFSIZE 300
@@ -38,15 +39,44 @@
 #define ENP_CMD_EMULATION 0x30 // эмуляция измерений датчиков
 #define ENP_CMD_NAVSOL 0x40 // навигационное решение
 #define ENP_CMD_USER 0x41 // пользовательский пакет данных
-
+#define ENP_CMD_ERROR 0x80 // Error flag
 #define ENP_PACKNUM 8     // Кол-во пакетов
 #define ENP_PACKVARNUM 50 // Количество переменных пакета
+
+#define ENP_PAYLOAD_MAX_SIZE 256
 
 // Пакет переменных
 typedef struct {
   uint32_t varId[ENP_PACKVARNUM]; // идентификаторы переменных
   char varNum;                    // кол-во переменных
 } ENP_Pack_t;
+
+typedef struct {
+    uint8_t sync1;
+    uint8_t sync2;
+    uint16_t id;
+    uint8_t len;
+    uint8_t cmd;
+    uint8_t data[ENP_PAYLOAD_MAX_SIZE];
+    uint16_t crc;
+} enpFrame_t;
+
+typedef enum {
+    ENP_PROT_STAGE_SYNC1,
+    ENP_PROT_STAGE_SYNC2,
+    ENP_PROT_STAGE_ID1,
+    ENP_PROT_STAGE_ID2,
+    ENP_PROT_STAGE_LEN,
+    ENP_PROT_STAGE_CMD,
+    ENP_PROT_STAGE_PAYLOAD,
+    ENP_PROT_STAGE_CRC1,
+    ENP_PROT_STAGE_CRC2
+}protStage_t;
+
+typedef struct {
+    protStage_t stage;
+    uint8_t payloadIndex;
+}enpFrameState_t;
 
 // экземпляр протокола
 typedef struct {
@@ -60,6 +90,9 @@ typedef struct {
   uint16_t sid;    // идентификатор узла
   uint16_t devId1; // Идентификаторы устройств
   uint16_t devId2;
+  enpFrame_t rxFrame;
+  enpFrame_t txFrame;
+  enpFrameState_t rxFrameState;
 } ENP_Handle_t;
 
 // Инициализация протокола
@@ -94,5 +127,8 @@ extern void ENP_WriteWord(char *buf, uint16_t word);
 extern void ENP_WriteDoubleWord(char *buf, uint32_t dword);
 // Получение long из char массива
 extern long ENP_CharToLong(char *Data);
+
+
+bool ENP_ParseFrame(ENP_Handle_t* handle, uint8_t* data, uint32_t len);
 
 #endif
