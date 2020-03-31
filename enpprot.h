@@ -93,6 +93,7 @@ typedef struct {
   enpFrame_t rxFrame;
   enpFrame_t txFrame;
   enpFrameState_t rxFrameState;
+  bool isNewRxFrame;
 } ENP_Handle_t;
 
 // Инициализация протокола
@@ -130,5 +131,6 @@ extern long ENP_CharToLong(char *Data);
 
 
 bool ENP_ParseFrame(ENP_Handle_t* handle, uint8_t* data, uint32_t len);
+void ENP_AnswerProc(ENP_Handle_t *handle);
 
 #endif

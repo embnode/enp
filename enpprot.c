@@ -4,7 +4,9 @@
 #include "enpprot.h"
 #include "smpprot.h"
 #include "stdbool.h"
+#include "string.h"
 
+static const char *STANDART_NAME = "Too long name";
 // Пакеты переменных
 static ENP_Pack_t *ENP_Pack = 0;
 
@@ -17,6 +19,10 @@ static uint16_t Read16(uint8_t *buf) {
   return (uint16_t)buf[0] + ((uint16_t)buf[1] << 8);
 }
 
+static uint32_t Read32(uint8_t *buf) {
+  return (uint32_t)buf[0] + ((uint32_t)buf[1] << 8) + ((uint32_t)buf[2] << 16) +
+         ((uint32_t)buf[3] << 24);
+}
 // Чтение двойного слова
 uint32_t ENP_ReadDoubleWord(char *buf) {
   return (uint32_t)buf[0] + ((uint32_t)buf[1] << 8) + ((uint32_t)buf[2] << 16) +
@@ -87,6 +93,7 @@ void ENP_InitHandle(
   handle->sid = 0;
   handle->devId1 = devId1;
   handle->devId2 = devId2;
+  handle->isNewRxFrame = false;
 }
 
 // Обработчик протокола
@@ -537,6 +544,7 @@ bool ENP_ParseFrame(ENP_Handle_t *handle, uint8_t *data, uint32_t len) {
       calcedCrc = CalcFrameCrc(frame);
       if (frame->crc == calcedCrc) {
         isFrameParsed = true;
+        handle->isNewRxFrame = true;
       }
       state->stage = ENP_PROT_STAGE_SYNC1;
       break;
@@ -549,19 +557,28 @@ bool ENP_ParseFrame(ENP_Handle_t *handle, uint8_t *data, uint32_t len) {
   return isFrameParsed;
 }
 
-void ENP_Parse(ENP_Handle_t *handle) {
-  uint16_t id, prop;
+static void FormErrorFrame(enpFrame_t *frame, uint8_t error) {
+  frame->cmd |= ENP_CMD_ERROR;
+  frame->data[0] = error;
+  frame->len = 2;
+}
+
+void ENP_AnswerProc(ENP_Handle_t *handle) {
+  uint16_t id, prop, varId, varNum, varCounter, nodeNum;
   uint32_t value;
   const ENP_Node_t *node;
-  int i, j, n;
-  bool isFrameParsed = false;
   uint8_t varIndex = 0;
   enpFrame_t *txFrame = &handle->txFrame;
   enpFrame_t *rxFrame = &handle->rxFrame;
-  // char* txBuff = handle->txBuf;
+  uint32_t stringLenght = 0;
+  const char *str;
+  bool isNodeValid = false;
+  char *txBuff = handle->txBuf;
+  uint16_t crcIndex;
 
   // if frame was parsed. preparation of an answer
-  if (isFrameParsed) {
+  if (handle->isNewRxFrame) {
+    memcpy(txFrame, rxFrame, sizeof(enpFrame_t));
     // command handler
     switch (rxFrame->cmd) {
     // get number of nodes
@@ -572,125 +589,156 @@ void ENP_Parse(ENP_Handle_t *handle) {
 
     // get node description
     case ENP_CMD_GETNODEDESCR:
-      n = Read16(&rxFrame->data[0]); // node number
-      if (n < ENP_NodeNum) {
-        Write16(&txFrame->data[0], n);
-        Write16(&txFrame->data[2], ENP_NodeList[n]->id);
-        Write16(&txFrame->data[4], ENP_NodeList[n]->pid);
-        Write16(&txFrame->data[6], ENP_NodeList[n]->varNum);
-        // TODO strings
-        if (ENP_NodeList[n]->NodeGetName) {
-          ENP_NodeList[n]->NodeGetName(ENP_NodeList[n]->id,
-                                       (char *)&txFrame->data[8]);
-        } else {
-          // txbuf[len] = 0;
+      nodeNum = Read16(&rxFrame->data[0]); // node number
+      if (nodeNum < ENP_NodeNum) {
+        Write16(&txFrame->data[0], nodeNum);
+        Write16(&txFrame->data[2], ENP_NodeList[nodeNum]->id);
+        Write16(&txFrame->data[4], ENP_NodeList[nodeNum]->pid);
+        Write16(&txFrame->data[6], ENP_NodeList[nodeNum]->varNum);
+        txFrame->len = 9; // 8 byte data + 1 command byte
+        node = ENP_NodeList[nodeNum];
+        str = node->name;
+        stringLenght = strlen(str);
+        // check string lenght before copy
+        if (stringLenght >= ENP_PAYLOAD_MAX_SIZE - txFrame->len) {
+          str = STANDART_NAME;
+          stringLenght = strlen(str);
         }
-        // ищем конец описания переменной
-        // while (txbuf[len++]) {
-        // }
+        strcpy((char *)&txFrame->data[8], str);
+        txFrame->len += stringLenght;
       } else {
-        txFrame->cmd |= ENP_CMD_ERROR;
-        txFrame->data[0] = ENP_ERROR_NODEID;
+        FormErrorFrame(txFrame, ENP_ERROR_NODEID);
       }
       break;
 
     // get description of variable
     case ENP_CMD_GETVARDESCR:
       id = Read16(&rxFrame->data[0]);
-      n = Read16(&rxFrame->data[2]); // variable number
+      varNum = Read16(&rxFrame->data[2]); // the variable number
       node = ENP_FindNode(id);
       if (node) {
-        // TODO variable name
-        // if (node->VarGetAttr(id, n, txbuf + 12, &prop) == ENP_ERROR_NONE) {
-        Write16(&txFrame->data[0], id);
-        Write16(&txFrame->data[2], n);
-        Write16(&txFrame->data[4], prop);
-        txFrame->len = 7;
-        //} else {
-        // txFrame->cmd |= ENP_CMD_ERROR;
-        // txFrame->data[0] = ENP_ERROR_VARID;
-        // txFrame->len = 2;
-        //}
+        if (varNum < node->varNum) {
+          prop = node->varAttr[varNum].prop;
+          Write16(&txFrame->data[0], id);
+          Write16(&txFrame->data[2], varNum);
+          Write16(&txFrame->data[4], prop);
+          txFrame->len = 7; // 6 data bytes + 1 byte cmd
+          str = node->varAttr[varNum].name;
+          stringLenght = strlen(str);
+          // check string lenght before copy
+          if (stringLenght >= ENP_PAYLOAD_MAX_SIZE - txFrame->len) {
+            str = STANDART_NAME;
+            stringLenght = strlen(str);
+          }
+          strcpy((char *)&txFrame->data[6], str);
+          txFrame->len += stringLenght;
+        } else {
+          FormErrorFrame(txFrame, ENP_ERROR_VARID);
+        }
       } else {
-        txFrame->cmd |= ENP_CMD_ERROR;
-        txFrame->data[0] = ENP_ERROR_NODEID;
-        txFrame->len = 2;
+        FormErrorFrame(txFrame, ENP_ERROR_NODEID);
       }
       break;
 
     // get variable value
     case ENP_CMD_GETVARS:
       id = Read16(&rxFrame->data[0]);
-      i = Read16(&rxFrame->data[2]); // first variable number
-      n = Read16(&rxFrame->data[4]); // number of variables
+      varId = Read16(&rxFrame->data[2]);  // first variable number
+      varNum = Read16(&rxFrame->data[4]); // number of variables
       node = ENP_FindNode(id);
       if (node) {
         varIndex = 6; // id, first variable and count of variables
-        for (j = 0; j < n; j++, i++) {
-          if (node->VarGetVal &&
-              node->VarGetVal(id, i, &value) == ENP_ERROR_NONE) {
-            // записываем значение переменной
-            Write32(&rxFrame->data[varIndex], value);
-            varIndex += 4;
-            if (varIndex >= ENP_PAYLOAD_MAX_SIZE) {
+        Write16(&txFrame->data[0], id);
+        Write16(&txFrame->data[2], varId);
+        txFrame->len = 7; // cmd + id + varId + varCounter
+        varCounter = 0;
+        isNodeValid = true;
+        for (int j = varId; j < varNum; j++) {
+          /*C compiler processes IF from right to left. Nested construction is
+           * needed for unambiguous execution and understanding of the reader*/
+          varCounter++;
+          if (node->VarGetVal) {
+            if (node->VarGetVal(id, j, &value) == ENP_ERROR_NONE) {
+              // write variable
+              Write32(&txFrame->data[varIndex], value);
+              varIndex += 4;
+              txFrame->len += 4;
+              if (varIndex >= ENP_PAYLOAD_MAX_SIZE) {
+                isNodeValid = false;
+                break;
+              }
+            } else {
+              isNodeValid = false;
               break;
             }
           } else {
+            isNodeValid = false;
             break;
           }
         }
-        Write16(&txFrame->data[0], id);
-        Write16(&txFrame->data[2], i);
-        Write16(&txFrame->data[4], j);
+        if (isNodeValid) {
+          Write16(&txFrame->data[4], varCounter);
+        } else {
+          FormErrorFrame(txFrame, ENP_ERROR_VARID);
+          break;
+        }
       } else {
-        txFrame->cmd |= ENP_CMD_ERROR; // ошибка - неверный идентификатор узла
-        txFrame->data[0] = ENP_ERROR_NODEID;
-        txFrame->len = 2;
+        FormErrorFrame(txFrame, ENP_ERROR_NODEID);
       }
       break;
 
     // set variable value
     case ENP_CMD_SETVARS:
       id = Read16(&rxFrame->data[0]);
-      i = Read16(&rxFrame->data[2]); // first variable number
-      n = Read16(&rxFrame->data[4]); // number of variables
+      varId = Read16(&rxFrame->data[2]);  // first variable number
+      varNum = Read16(&rxFrame->data[4]); // number of variables
       node = ENP_FindNode(id);
       if (node) {
-        // TODO
-        for (j = 0; j < n; j++, i++) {
-          // value = ENP_ReadDoubleWord(rxbuf + pos + 12 + (j << 2));
-          if (node->VarSetVal(id, i, &value) == ENP_ERROR_NONE &&
-              node->VarSetVal) {
+        Write16(&txFrame->data[0], id);
+        Write16(&txFrame->data[2], varId);
+        varCounter = 0;
+        for (int j = 0; j < varNum; j++, varId++) {
+          value = Read32(&rxFrame->data[6 + (j << 2)]);
+          varCounter++;
+          /*C compiler processes IF from right to left. Nested construction is
+           * needed for unambiguous execution and understanding of the reader*/
+          if (node->VarSetVal) {
+            if (node->VarSetVal(id, varId, &value) != ENP_ERROR_NONE) {
+              isNodeValid = false;
+              break;
+            }
           } else {
+            isNodeValid = false;
             break;
           }
         }
-        Write16(&rxFrame->data[0], id);
-        Write16(&rxFrame->data[2], i);
-        Write16(&rxFrame->data[4], j);
+        if (isNodeValid) {
+          Write16(&txFrame->data[4], varCounter);
+        } else {
+          FormErrorFrame(txFrame, ENP_ERROR_VARID);
+          break;
+        }
       } else {
-        rxFrame->cmd |= ENP_CMD_ERROR;
-        rxFrame->data[0] = ENP_ERROR_NODEID;
-        rxFrame->len = 2;
+        FormErrorFrame(txFrame, ENP_ERROR_NODEID);
       }
       break;
 
     // Unknown command
     default:
-      // TODO error pack func
-      rxFrame->cmd |= ENP_CMD_ERROR;
-      rxFrame->data[0] = ENP_ERROR_COMMAND;
-      rxFrame->len = 2;
+      FormErrorFrame(txFrame, ENP_ERROR_COMMAND);
       break;
     }
-    // записываем контрольную сумму
-    // ENP_WriteWord(txbuf + len, CRC16(txbuf, len, 0xFFFF, 1));
 
     txFrame->crc = CalcFrameCrc(txFrame);
-    // memset(txBuff, 0, sizeof(ENP_BUFFSIZE));
+    crcIndex = txFrame->len + 5; // sync + id + cmd
+    memcpy(txBuff, txFrame, txFrame->len + 5);
+    txBuff[crcIndex++] = txFrame->crc & 0xFF;
+    txBuff[crcIndex] = (txFrame->crc >> 8) & 0xFF;
+    handle->txLen = txFrame->len + 7;
 
-    if (handle->TxFun(handle->txBuf, handle->txLen)) {
-      handle->txLen = 0;
+    if (handle->TxFun) {
+      handle->TxFun(txBuff, handle->txLen);
     }
+    handle->isNewRxFrame = false;
   }
 }
