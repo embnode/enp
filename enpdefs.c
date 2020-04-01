@@ -173,8 +173,7 @@ uint8_t ENP_SavePars(ENP_Data_t *data, uint32_t update) {
     return 0;
   }
   // вычисляем контрольную сумму параметров конфигурации
-  ENP_Pars.ckSum = CRC16(&ENP_Pars, sizeof(ENP_Pars) - sizeof(uint32_t), 0xFFFF,
-                         sizeof(char));
+  ENP_Pars.ckSum = Crc16(&ENP_Pars, sizeof(ENP_Pars) - sizeof(uint32_t), 0xFFFF);
   // сохраняем параметры конфигурации
   if (!ENP_FlashWrite(&ENP_Pars, &data->pars, sizeof(ENP_Pars))) {
     return 0;
@@ -185,8 +184,7 @@ uint8_t ENP_SavePars(ENP_Data_t *data, uint32_t update) {
 // Загрузка параметров конфигурации
 uint8_t ENP_LoadPars(ENP_Data_t *data) {
   // проверяем контрольную сумму
-  if (CRC16(&data->pars, sizeof(data->pars) - sizeof(uint32_t), 0xFFFF,
-            sizeof(char)) == data->pars.ckSum) {
+  if (Crc16(&data->pars, sizeof(data->pars) - sizeof(uint32_t), 0xFFFF) == data->pars.ckSum) {
     // загружаем параметры
     ENP_Pars = data->pars;
     return 1;
@@ -235,7 +233,7 @@ uint8_t ENP_SaveNode(ENP_Data_t *data, const ENP_Node_t *node, int nodenum) {
           return 0;
         }
         // вычисляем контрольную сумму
-        val = CRC16(&vars->nodeId, (k << 2) + 4, 0xFFFF, sizeof(char));
+        val = Crc16(&vars->nodeId, (k << 2) + 4, 0xFFFF);
         // сохраняем контрольную сумму
         if (!ENP_FlashWrite(&val, &vars->ckSum, sizeof(val))) {
           return 0;

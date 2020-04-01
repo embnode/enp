@@ -45,6 +45,10 @@
 
 #define ENP_PAYLOAD_MAX_SIZE 256
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Пакет переменных
 typedef struct {
   uint32_t varId[ENP_PACKVARNUM]; // идентификаторы переменных
@@ -116,8 +120,8 @@ extern void ENP_InitHandle(ENP_Handle_t *handle, // экземпляр обра�
                            int (*txf)(const char *, int) // функция передачи
 );
 
-// Обработчик протокола
-extern void ENP_Proc(ENP_Handle_t *handle);
+// // Обработчик протокола
+// extern void ENP_Proc(ENP_Handle_t *handle);
 // Чтение слова
 extern uint16_t ENP_ReadWord(char *buf);
 // Чтение двойного слова
@@ -132,5 +136,9 @@ extern long ENP_CharToLong(char *Data);
 
 bool ENP_ParseFrame(ENP_Handle_t* handle, uint8_t* data, uint32_t len);
 void ENP_AnswerProc(ENP_Handle_t *handle);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
