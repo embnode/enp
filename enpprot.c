@@ -131,95 +131,102 @@ void ENP_AnswerProc(ENP_Handle_t *handle) {
   char *txBuff = handle->txBuf;
   uint16_t crcIndex;
 
-  // TODO id check
   // if frame was parsed. preparation of an answer
   if (handle->isNewRxFrame) {
-    memcpy(txFrame, rxFrame, sizeof(enpFrame_t));
-    // command handler
-    switch (rxFrame->cmd) {
-    // get number of nodes
-    case ENP_CMD_GETNODENUM:
-      Write16(&txFrame->data[0], ENP_NodeNum);
-      txFrame->len = 3;
-      break;
+    id = rxFrame->id;
+    // check id
+    if (id == handle->devId1 || id == handle->devId2) {
+      memcpy(txFrame, rxFrame, sizeof(enpFrame_t));
+      // command handler
+      switch (rxFrame->cmd) {
+      // get number of nodes
+      case ENP_CMD_GETNODENUM:
+        Write16(&txFrame->data[0], ENP_NodeNum);
+        txFrame->len = 3;
+        break;
 
-    // get node description
-    case ENP_CMD_GETNODEDESCR:
-      nodeNum = Read16(&rxFrame->data[0]); // node number
-      if (nodeNum < ENP_NodeNum) {
-        Write16(&txFrame->data[0], nodeNum);
-        Write16(&txFrame->data[2], ENP_NodeList[nodeNum]->id);
-        Write16(&txFrame->data[4], ENP_NodeList[nodeNum]->pid);
-        Write16(&txFrame->data[6], ENP_NodeList[nodeNum]->varNum);
-        txFrame->len = 9; // 8 byte data + 1 command byte
-        node = ENP_NodeList[nodeNum];
-        str = node->name;
-        stringLenght = strlen(str);
-        // check string lenght before copy
-        if (stringLenght >= ENP_PAYLOAD_MAX_SIZE - txFrame->len) {
-          str = STANDART_NAME;
-          stringLenght = strlen(str);
-        }
-        strcpy((char *)&txFrame->data[8], str);
-        txFrame->len += stringLenght;
-      } else {
-        FormErrorFrame(txFrame, ENP_ERROR_NODEID);
-      }
-      break;
-
-    // get description of variable
-    case ENP_CMD_GETVARDESCR:
-      id = Read16(&rxFrame->data[0]);
-      varNum = Read16(&rxFrame->data[2]); // the variable number
-      node = ENP_FindNode(id);
-      if (node) {
-        if (varNum < node->varNum) {
-          prop = node->varAttr[varNum].prop;
-          Write16(&txFrame->data[0], id);
-          Write16(&txFrame->data[2], varNum);
-          Write16(&txFrame->data[4], prop);
-          txFrame->len = 7; // 6 data bytes + 1 byte cmd
-          str = node->varAttr[varNum].name;
+      // get node description
+      case ENP_CMD_GETNODEDESCR:
+        nodeNum = Read16(&rxFrame->data[0]); // node number
+        if (nodeNum < ENP_NodeNum) {
+          Write16(&txFrame->data[0], nodeNum);
+          Write16(&txFrame->data[2], ENP_NodeList[nodeNum]->id);
+          Write16(&txFrame->data[4], ENP_NodeList[nodeNum]->pid);
+          Write16(&txFrame->data[6], ENP_NodeList[nodeNum]->varNum);
+          txFrame->len = 9; // 8 byte data + 1 command byte
+          node = ENP_NodeList[nodeNum];
+          str = node->name;
           stringLenght = strlen(str);
           // check string lenght before copy
           if (stringLenght >= ENP_PAYLOAD_MAX_SIZE - txFrame->len) {
             str = STANDART_NAME;
             stringLenght = strlen(str);
           }
-          strcpy((char *)&txFrame->data[6], str);
+          strcpy((char *)&txFrame->data[8], str);
           txFrame->len += stringLenght;
         } else {
-          FormErrorFrame(txFrame, ENP_ERROR_VARID);
+          FormErrorFrame(txFrame, ENP_ERROR_NODEID);
         }
-      } else {
-        FormErrorFrame(txFrame, ENP_ERROR_NODEID);
-      }
-      break;
+        break;
 
-    // get variable value
-    case ENP_CMD_GETVARS:
-      id = Read16(&rxFrame->data[0]);
-      varId = Read16(&rxFrame->data[2]);  // first variable number
-      varNum = Read16(&rxFrame->data[4]); // number of variables
-      node = ENP_FindNode(id);
-      if (node) {
-        varIndex = 6; // id, first variable and count of variables
-        Write16(&txFrame->data[0], id);
-        Write16(&txFrame->data[2], varId);
-        txFrame->len = 7; // cmd + id + varId + varCounter
-        varCounter = 0;
-        isNodeValid = true;
-        for (int j = varId; j < varNum; j++) {
-          /*C compiler processes IF from right to left. Nested construction is
-           * needed for unambiguous execution and understanding of the reader*/
-          varCounter++;
-          if (node->VarGetVal) {
-            if (node->VarGetVal(id, j, &value) == ENP_ERROR_NONE) {
-              // write variable
-              Write32(&txFrame->data[varIndex], value);
-              varIndex += 4;
-              txFrame->len += 4;
-              if (varIndex >= ENP_PAYLOAD_MAX_SIZE) {
+      // get description of variable
+      case ENP_CMD_GETVARDESCR:
+        id = Read16(&rxFrame->data[0]);
+        varNum = Read16(&rxFrame->data[2]); // the variable number
+        node = ENP_FindNode(id);
+        if (node) {
+          if (varNum < node->varNum) {
+            prop = node->varAttr[varNum].prop;
+            Write16(&txFrame->data[0], id);
+            Write16(&txFrame->data[2], varNum);
+            Write16(&txFrame->data[4], prop);
+            txFrame->len = 7; // 6 data bytes + 1 byte cmd
+            str = node->varAttr[varNum].name;
+            stringLenght = strlen(str);
+            // check string lenght before copy
+            if (stringLenght >= ENP_PAYLOAD_MAX_SIZE - txFrame->len) {
+              str = STANDART_NAME;
+              stringLenght = strlen(str);
+            }
+            strcpy((char *)&txFrame->data[6], str);
+            txFrame->len += stringLenght;
+          } else {
+            FormErrorFrame(txFrame, ENP_ERROR_VARID);
+          }
+        } else {
+          FormErrorFrame(txFrame, ENP_ERROR_NODEID);
+        }
+        break;
+
+      // get variable value
+      case ENP_CMD_GETVARS:
+        id = Read16(&rxFrame->data[0]);
+        varId = Read16(&rxFrame->data[2]);  // first variable number
+        varNum = Read16(&rxFrame->data[4]); // number of variables
+        node = ENP_FindNode(id);
+        if (node) {
+          varIndex = 6; // id, first variable and count of variables
+          Write16(&txFrame->data[0], id);
+          Write16(&txFrame->data[2], varId);
+          txFrame->len = 7; // cmd + id + varId + varCounter
+          varCounter = 0;
+          isNodeValid = true;
+          for (int j = varId; j < varNum; j++) {
+            /*C compiler processes IF from right to left. Nested construction is
+             * needed for unambiguous execution and understanding of the
+             * reader*/
+            varCounter++;
+            if (node->VarGetVal) {
+              if (node->VarGetVal(id, j, &value) == ENP_ERROR_NONE) {
+                // write variable
+                Write32(&txFrame->data[varIndex], value);
+                varIndex += 4;
+                txFrame->len += 4;
+                if (varIndex >= ENP_PAYLOAD_MAX_SIZE) {
+                  isNodeValid = false;
+                  break;
+                }
+              } else {
                 isNodeValid = false;
                 break;
               }
@@ -227,75 +234,73 @@ void ENP_AnswerProc(ENP_Handle_t *handle) {
               isNodeValid = false;
               break;
             }
+          }
+          if (isNodeValid) {
+            Write16(&txFrame->data[4], varCounter);
           } else {
-            isNodeValid = false;
+            FormErrorFrame(txFrame, ENP_ERROR_VARID);
             break;
           }
-        }
-        if (isNodeValid) {
-          Write16(&txFrame->data[4], varCounter);
         } else {
-          FormErrorFrame(txFrame, ENP_ERROR_VARID);
-          break;
+          FormErrorFrame(txFrame, ENP_ERROR_NODEID);
         }
-      } else {
-        FormErrorFrame(txFrame, ENP_ERROR_NODEID);
-      }
-      break;
+        break;
 
-    // set variable value
-    case ENP_CMD_SETVARS:
-      id = Read16(&rxFrame->data[0]);
-      varId = Read16(&rxFrame->data[2]);  // first variable number
-      varNum = Read16(&rxFrame->data[4]); // number of variables
-      node = ENP_FindNode(id);
-      if (node) {
-        Write16(&txFrame->data[0], id);
-        Write16(&txFrame->data[2], varId);
-        varCounter = 0;
-        for (int j = 0; j < varNum; j++, varId++) {
-          value = Read32(&rxFrame->data[6 + (j << 2)]);
-          varCounter++;
-          /*C compiler processes IF from right to left. Nested construction is
-           * needed for unambiguous execution and understanding of the reader*/
-          if (node->VarSetVal) {
-            if (node->VarSetVal(id, varId, &value) != ENP_ERROR_NONE) {
+      // set variable value
+      case ENP_CMD_SETVARS:
+        id = Read16(&rxFrame->data[0]);
+        varId = Read16(&rxFrame->data[2]);  // first variable number
+        varNum = Read16(&rxFrame->data[4]); // number of variables
+        node = ENP_FindNode(id);
+        if (node) {
+          Write16(&txFrame->data[0], id);
+          Write16(&txFrame->data[2], varId);
+          varCounter = 0;
+          for (int j = 0; j < varNum; j++, varId++) {
+            value = Read32(&rxFrame->data[6 + (j << 2)]);
+            varCounter++;
+            /*C compiler processes IF from right to left. Nested construction is
+             * needed for unambiguous execution and understanding of the
+             * reader*/
+            if (node->VarSetVal) {
+              if (node->VarSetVal(id, varId, &value) != ENP_ERROR_NONE) {
+                isNodeValid = false;
+                break;
+              }
+            } else {
               isNodeValid = false;
               break;
             }
+          }
+          if (isNodeValid) {
+            Write16(&txFrame->data[4], varCounter);
           } else {
-            isNodeValid = false;
+            FormErrorFrame(txFrame, ENP_ERROR_VARID);
             break;
           }
-        }
-        if (isNodeValid) {
-          Write16(&txFrame->data[4], varCounter);
         } else {
-          FormErrorFrame(txFrame, ENP_ERROR_VARID);
-          break;
+          FormErrorFrame(txFrame, ENP_ERROR_NODEID);
         }
-      } else {
-        FormErrorFrame(txFrame, ENP_ERROR_NODEID);
+        break;
+
+      // Unknown command
+      default:
+        FormErrorFrame(txFrame, ENP_ERROR_COMMAND);
+        break;
       }
-      break;
 
-    // Unknown command
-    default:
-      FormErrorFrame(txFrame, ENP_ERROR_COMMAND);
-      break;
+      txFrame->crc = CalcFrameCrc(txFrame);
+      crcIndex = txFrame->len + 5; // sync + id + cmd
+      memcpy(txBuff, txFrame, txFrame->len + 5);
+      txBuff[crcIndex++] = txFrame->crc & 0xFF;
+      txBuff[crcIndex] = (txFrame->crc >> 8) & 0xFF;
+      handle->txLen = txFrame->len + 7;
+
+      if (handle->TxFun) {
+        handle->TxFun(txBuff, handle->txLen);
+      }
+      handle->isNewRxFrame = false;
     }
-
-    txFrame->crc = CalcFrameCrc(txFrame);
-    crcIndex = txFrame->len + 5; // sync + id + cmd
-    memcpy(txBuff, txFrame, txFrame->len + 5);
-    txBuff[crcIndex++] = txFrame->crc & 0xFF;
-    txBuff[crcIndex] = (txFrame->crc >> 8) & 0xFF;
-    handle->txLen = txFrame->len + 7;
-
-    if (handle->TxFun) {
-      handle->TxFun(txBuff, handle->txLen);
-    }
-    handle->isNewRxFrame = false;
   }
 }
 
