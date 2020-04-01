@@ -4,9 +4,8 @@
 #ifndef ENP_HELPER_H_
 #define ENP_HELPER_H_
 
-#include "enpdefs.h"
-#include "enpprot.h"
-#include "smpprot.h"
+#include "eNode.h"
+#include "enProt.h"
 #include "stdint.h"
 #ifdef __cplusplus
 extern "C" {

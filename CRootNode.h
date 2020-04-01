@@ -3,7 +3,7 @@
  ****************************************************************************/
 #ifndef _NODE_ROOT_CPP_H
 #define _NODE_ROOT_CPP_H
-#include "enp_node.h"
+#include "eINode.h"
 #include "enpapi.h"
 
 namespace NS_NODE_ROOT {

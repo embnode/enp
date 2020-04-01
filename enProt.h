@@ -3,8 +3,8 @@
  ****************************************************************************/
 #ifndef ENPROT_H_
 #define ENPROT_H_
-#include "enpapi.h"
-#include "enpdefs.h"
+#include "enpHelper.h"
+#include "eNode.h"
 #include "stdbool.h"
 #include "stdint.h"
 

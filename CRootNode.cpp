@@ -1,7 +1,7 @@
 /****************************************************************************
  *                      Embedded node protocol(ENP)                         *
  ****************************************************************************/
-#include "c_node_root.h"
+#include "CRootNode.h"
 #include "string.h"
 
 using namespace NS_NODE_ROOT;

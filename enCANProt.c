@@ -1,7 +1,7 @@
 /****************************************************************************
  *                      Embedded node protocol(ENP)                         *
  ****************************************************************************/
-#include "smpprot.h"
+#include "enCANProt.h"
 #include "string.h"
 #ifdef ENP_FREERTOS
 #include "cmsis_os.h"

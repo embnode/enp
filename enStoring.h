@@ -3,7 +3,7 @@
  ****************************************************************************/
 #ifndef EN_STORING_H_
 #define EN_STORING_H_
-#include "enpdefs.h"
+#include "eNode.h"
 #include "stdint.h"
 
 // Параметры конфигурации

@@ -2,8 +2,7 @@
  *                      Embedded node protocol(ENP)                         *
  * TODO How it use
  ****************************************************************************/
-#include "enpprot.h"
-#include "smpprot.h"
+#include "enProt.h"
 #include "stdbool.h"
 #include "string.h"
 

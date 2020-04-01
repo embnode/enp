@@ -3,7 +3,7 @@
  ****************************************************************************/
 #ifndef ENPDEFS_H_
 #define ENPDEFS_H_
-#include "enpapi.h"
+#include "enpHelper.h"
 #include "stdint.h"
 
 #if defined(__GNUC__)
