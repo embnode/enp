@@ -14,12 +14,6 @@ static uint32_t Read32(uint8_t *buf);
 static void Write16(uint8_t *buf, uint16_t value);
 static void Write32(uint8_t *buf, uint32_t value);
 
-// Intialization nodes
-void ENP_NodeListInit(const ENP_Node_t **nodelist, int maxnodenum) {
-  ENP_NodeList = nodelist;
-  ENP_MaxNodeNum = maxnodenum;
-}
-
 // Handler intialization
 void ENP_InitHandle(ENP_Handle_t *handle, uint16_t devId1, uint16_t devId2,
                     int (*txf)(const char *, int)) {
@@ -137,6 +131,7 @@ void ENP_AnswerProc(ENP_Handle_t *handle) {
   char *txBuff = handle->txBuf;
   uint16_t crcIndex;
 
+  // TODO id check
   // if frame was parsed. preparation of an answer
   if (handle->isNewRxFrame) {
     memcpy(txFrame, rxFrame, sizeof(enpFrame_t));

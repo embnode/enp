@@ -4,7 +4,9 @@
 #ifndef ENPROT_H_
 #define ENPROT_H_
 #include "enpapi.h"
+#include "enpdefs.h"
 #include "stdbool.h"
+#include "stdint.h"
 
 // Размер буферов приёма-передачи TODO
 #define ENP_BUFFSIZE 300
@@ -63,9 +65,6 @@ typedef struct {
   enpFrameState_t rxFrameState;
   bool isNewRxFrame;
 } ENP_Handle_t;
-
-// Protocol initialization
-void ENP_NodeListInit(const ENP_Node_t **nodelist, int maxnodenum);
 
 // Handle init
 void ENP_InitHandle(ENP_Handle_t *, uint16_t, uint16_t,

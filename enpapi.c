@@ -81,8 +81,7 @@ static const uint32_t CRC32_Table[256] = {
     0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
     0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d};
 
-// TODO weak
-uint16_t Crc16(const void *data, uint32_t size, uint16_t crc) {
+__weak uint16_t Crc16(const void *data, uint32_t size, uint16_t crc) {
   const uint8_t *ptr = data;
 
   for (; size--; ptr++) {
@@ -91,8 +90,7 @@ uint16_t Crc16(const void *data, uint32_t size, uint16_t crc) {
   return crc;
 }
 
-// TODO weak
-uint32_t CRC32(const void *data, uint32_t size, uint32_t crc) {
+__weak uint32_t Crc32(const void *data, uint32_t size, uint32_t crc) {
   const uint8_t *ptr = data;
 
   for (; size--; ptr++) {

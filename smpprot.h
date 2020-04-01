@@ -4,6 +4,7 @@
 #ifndef SMP_H_
 #define SMP_H_
 #include "enpapi.h"
+#include "stdint.h"
 
 extern uint32_t SMP_Error;
 

@@ -19,7 +19,7 @@ extern "C" {
 uint16_t Crc16(const void *data, uint32_t size, uint16_t crc);
 
 // Crc 32 calculate
-uint32_t CRC32(const void *data, uint32_t size, uint32_t crc);
+uint32_t Crc32(const void *data, uint32_t size, uint32_t crc);
 
 #ifdef __cplusplus
 }
