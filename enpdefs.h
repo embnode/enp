@@ -6,6 +6,15 @@
 #include "enpapi.h"
 #include "stdint.h"
 
+#if  defined ( __GNUC__ )
+  #ifndef __weak
+    #define __weak   __attribute__((weak))
+  #endif /* __weak */
+  #ifndef __packed
+    #define __packed __attribute__((__packed__))
+  #endif /* __packed */
+#endif /* __GNUC__ */
+
 // Коды ошибок конфигурации
 #define ENP_ERROR_NONE 0    // нет ошибок
 #define ENP_ERROR_NODENUM 1 // недопустимый номер узла
@@ -126,11 +135,9 @@ extern uint16_t ENP_NodeName(uint16_t nodeid, char *name);
 // Проверка узлов на наличие ошибок
 extern uint8_t ENP_Error(void);
 
-// Функция стирания Flash памяти
-extern uint8_t (*ENP_FlashErase)(uint32_t startAddr, uint32_t stopAddr);
-
-// Функция записи данных во Flash
-extern uint8_t (*ENP_FlashWrite)(const void *ptr, void *dst, int size);
+// ENP flash interface
+uint8_t ENP_FlashErase(uint32_t startAddr, uint32_t stopAddr);
+uint8_t ENP_FlashWrite(void* dst, const void* ptr, int size);
 
 // Сохранение параметров конфигурации
 extern uint8_t ENP_SavePars(ENP_Data_t *data, uint32_t update);

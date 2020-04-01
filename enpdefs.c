@@ -36,12 +36,6 @@ uint16_t ENP_MaxNodeNum = 0;
 // Количество узлов конфигурации
 uint16_t ENP_NodeNum = 0;
 
-// Функция стирания секторов памяти
-uint8_t (*ENP_FlashErase)(uint32_t startAddr, uint32_t stopAddr) = 0;
-
-// Функция записи данных во Flash
-uint8_t (*ENP_FlashWrite)(const void *ptr, void *dst, int size) = 0;
-
 // Добавление узла конфигурации
 uint16_t ENP_InsertNode(const ENP_Node_t *node, uint16_t num) {
   int i, j, n = 0;
@@ -165,6 +159,14 @@ uint8_t ENP_Error() {
   return 0;
 }
 
+__weak uint8_t ENP_FlashWrite(void* dst, const void* ptr, int size) {
+  return 0;
+}
+
+__weak uint8_t ENP_FlashErase(uint32_t startAddr, uint32_t stopAddr) {
+  return 0;
+}
+
 // Сохранение параметров конфигурации
 uint8_t ENP_SavePars(ENP_Data_t *data, uint32_t update) {
   // сохраняем флаг смены прошивки
@@ -218,9 +220,6 @@ uint8_t ENP_SaveNode(ENP_Data_t *data, const ENP_Node_t *node, int nodenum) {
             (prop & ENP_PROP_CONST))
           k++;
       if (k) {
-        // сохраняем идентификатор узла
-        if (!ENP_FlashWrite(&node->id, &vars->nodeId, sizeof(node->id)))
-          return 0;
         // сохраняем переменные
         for (k = i = 0; i < node->varNum; i++)
           if (node->VarGetAttr(node->id, i, 0, &prop) == ENP_ERROR_NONE &&

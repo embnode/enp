@@ -1,5 +1,6 @@
 /****************************************************************************
  *                      Embedded node protocol(ENP)                         *
+ * TODO How it use
  ****************************************************************************/
 #include "enpprot.h"
 #include "smpprot.h"
@@ -7,90 +8,23 @@
 #include "string.h"
 
 static const char *STANDART_NAME = "Too long name";
-// Пакеты переменных
-static ENP_Pack_t *ENP_Pack = 0;
 
-// Чтение слова
-uint16_t ENP_ReadWord(char *buf) {
-  return (uint16_t)buf[0] + ((uint16_t)buf[1] << 8);
-}
+static uint16_t Read16(uint8_t *buf);
+static uint32_t Read32(uint8_t *buf);
+static void Write16(uint8_t *buf, uint16_t value);
+static void Write32(uint8_t *buf, uint32_t value);
 
-static uint16_t Read16(uint8_t *buf) {
-  return (uint16_t)buf[0] + ((uint16_t)buf[1] << 8);
-}
-
-static uint32_t Read32(uint8_t *buf) {
-  return (uint32_t)buf[0] + ((uint32_t)buf[1] << 8) + ((uint32_t)buf[2] << 16) +
-         ((uint32_t)buf[3] << 24);
-}
-// Чтение двойного слова
-uint32_t ENP_ReadDoubleWord(char *buf) {
-  return (uint32_t)buf[0] + ((uint32_t)buf[1] << 8) + ((uint32_t)buf[2] << 16) +
-         ((uint32_t)buf[3] << 24);
-}
-
-// Запись слова
-void ENP_WriteWord(char *buf, uint16_t word) {
-  *buf++ = word & 0xFF;
-  *buf = word >> 8;
-}
-
-static void Write16(uint8_t *buf, uint16_t value) {
-  *buf++ = value & 0xFF;
-  *buf = value >> 8;
-}
-
-static void Write32(uint8_t *buf, uint32_t value) {
-  *buf++ = value & 0xFF;
-  *buf++ = (value >> 8) & 0xFF;
-  *buf++ = (value >> 16) & 0xFF;
-  *buf = (value >> 24) & 0xFF;
-}
-
-// Запись двойного слова
-void ENP_WriteDoubleWord(char *buf, uint32_t dword) {
-  *buf++ = dword & 0xFF;
-  *buf++ = (dword >> 8) & 0xFF;
-  *buf++ = (dword >> 16) & 0xFF;
-  *buf = (dword >> 24) & 0xFF;
-}
-
-// Инициализация протокола
-void ENP_Init(
-    // список узлов конфигурации
-    const ENP_Node_t **nodelist,
-    // максимальное кол-во узлов конфигурации
-    int maxnodenum,
-    // пакеты переменных
-    ENP_Pack_t *pack,
-    // функция стирания флэш-памяти
-    uint8_t (*erasefunc)(uint32_t startAddr, uint32_t stopAddr),
-    // функция записи флэш-памяти
-    uint8_t (*writefunc)(const void *ptr, void *dst, int size)) {
-  // инициализируем переменные
+// Intialization nodes
+void ENP_NodeListInit(const ENP_Node_t **nodelist, int maxnodenum) {
   ENP_NodeList = nodelist;
   ENP_MaxNodeNum = maxnodenum;
-  ENP_Pack = pack;
-  ENP_FlashErase = erasefunc;
-  ENP_FlashWrite = writefunc;
 }
 
-// Инициализация обработчика
-void ENP_InitHandle(
-    // экземпляр обработчика
-    ENP_Handle_t *handle,
-    // идентификаторы устройств
-    uint16_t devId1, uint16_t devId2,
-    // функция приема
-    int (*rxf)(),
-    // функция передачи
-    int (*txf)(const char *, int)) {
-  handle->rxLen = 0;
+// Handler intialization
+void ENP_InitHandle(ENP_Handle_t *handle, uint16_t devId1, uint16_t devId2,
+                    int (*txf)(const char *, int)) {
   handle->txLen = 0;
-  handle->RxFun = rxf;
   handle->TxFun = txf;
-  handle->packCntr = 0xFE;
-  handle->sid = 0;
   handle->devId1 = devId1;
   handle->devId2 = devId2;
   handle->isNewRxFrame = false;
@@ -368,4 +302,25 @@ void ENP_AnswerProc(ENP_Handle_t *handle) {
     }
     handle->isNewRxFrame = false;
   }
+}
+
+static uint16_t Read16(uint8_t *buf) {
+  return (uint16_t)buf[0] + ((uint16_t)buf[1] << 8);
+}
+
+static uint32_t Read32(uint8_t *buf) {
+  return (uint32_t)buf[0] + ((uint32_t)buf[1] << 8) + ((uint32_t)buf[2] << 16) +
+         ((uint32_t)buf[3] << 24);
+}
+
+static void Write16(uint8_t *buf, uint16_t value) {
+  *buf++ = value & 0xFF;
+  *buf = value >> 8;
+}
+
+static void Write32(uint8_t *buf, uint32_t value) {
+  *buf++ = value & 0xFF;
+  *buf++ = (value >> 8) & 0xFF;
+  *buf++ = (value >> 16) & 0xFF;
+  *buf = (value >> 24) & 0xFF;
 }
