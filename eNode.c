@@ -8,7 +8,7 @@
 const ENP_Node_t **ENP_NodeList = NULL;
 // Max number of nodes
 uint16_t ENP_MaxNodeNum = 0;
-// Количество узлов конфигурации
+// Current nodes number
 uint16_t ENP_NodeNum = 0;
 
 // Intialization nodes
@@ -17,99 +17,60 @@ void ENP_NodeListInit(const ENP_Node_t **nodelist, int maxnodenum) {
   ENP_MaxNodeNum = maxnodenum;
 }
 
-// Insert node
-uint16_t ENP_InsertNode(const ENP_Node_t *node, uint16_t num) {
-  int i, j, n = 0;
+// Insert nodes
+uint16_t ENP_InsertNodes(const ENP_Node_t *node, uint16_t num) {
+  int count = 0;
 
   if (node && ENP_NodeList) {
-    for (; n < num; n++, node++) {
+    for (int i = 0; i < num; i++) {
       if (ENP_NodeNum < ENP_MaxNodeNum) {
-        // ищем место в списке
-        for (i = 0; i < ENP_NodeNum && ENP_NodeList[i]->id < node->id; i++)
-          ;
-        // сдвигаем список
-        for (j = ENP_NodeNum++; j > i; j--)
-          ENP_NodeList[j] = ENP_NodeList[j - 1];
-        ENP_NodeList[i] = node;
+        // Add pointer to node in the list
+        ENP_NodeList[ENP_NodeNum] = node;
+        ENP_NodeNum++;
+        node++;
+        count++;
       } else {
         break;
       }
     }
   }
-  return n;
+  return count;
 }
 
 // Delete node
 uint16_t ENP_DeleteNode(const ENP_Node_t *node, uint16_t num) {
-  int i, n = 0;
+  int count = 0;
 
   if (node && ENP_NodeList) {
-    for (; n < num; n++, node++) {
-      // ищем узел в списке
-      for (i = 0; i < ENP_NodeNum && ENP_NodeList[i] != node; i++) {
-      }
-      if (i == ENP_NodeNum) {
-        break;
-      } else {
-        // сдвигаем список
-        for (; i < ENP_NodeNum - 1; i++) {
-          ENP_NodeList[i] = ENP_NodeList[i + 1];
+    for (int i = 0; i < num; i++) {
+      // looking for node in the list
+      for (int j = 0; j < ENP_NodeNum; j++) {
+        if (ENP_NodeList[j] == node) {
+          // shift the list
+          for (int d = j; d < ENP_NodeNum - 1; d++) {
+            ENP_NodeList[d] = ENP_NodeList[d + 1];
+          }
+          ENP_NodeNum--;
+          count++;
         }
-        ENP_NodeNum--;
       }
     }
   }
-  return n;
+  return count;
 }
 
-// Поиск узла конфигурации по идентификатору
+// find node. If node doesn't find it will return NULL
 const ENP_Node_t *ENP_FindNode(uint16_t nodeid) {
-  uint16_t n;
+  const ENP_Node_t *ret = NULL;
 
-  if (!ENP_NodeList) {
-    return 0;
-  }
-  for (n = 0; n < ENP_NodeNum && ENP_NodeList[n]->id != nodeid; n++) {
-  }
-
-  return n == ENP_NodeNum ? 0 : ENP_NodeList[n];
-}
-
-// Получение имени узла конфигурации
-uint16_t ENP_NodeName(uint16_t nodeid, char *name) {
-  const ENP_Node_t *node = ENP_FindNode(nodeid);
-  const char *str;
-
-  if (node && name) {
-    str = node->name;
-    while (*str) {
-      *name++ = *str++;
+  if (ENP_NodeList) {
+    for (int i = 0; i < ENP_NodeNum; i++) {
+      if (ENP_NodeList[i]->id == nodeid) {
+        ret = ENP_NodeList[i];
+        break;
+      }
     }
-    *name = 0;
-    return ENP_ERROR_NONE;
-  } else
-    return ENP_ERROR_NODEID;
-}
+  }
 
-// Проверка конфигурации на наличие ошибок
-uint8_t ENP_Error() {
-  // const ENP_Node_t *node;
-  // uint16_t i, n, prop;
-  // uint32_t value;
-
-  // if (ENP_NodeList) {
-  //   for (n = 0; n < ENP_NodeNum; n++) {
-  //     node = ENP_NodeList[n];
-  //     for (i = 0; i < node->varNum; i++) {
-  //       if (node->VarGetAttr &&
-  //           node->VarGetAttr(node->id, i, 0, &prop) == ENP_ERROR_NONE &&
-  //           (prop & ENP_PROP_ERROR) && node->VarGetVal &&
-  //           node->VarGetVal(node->id, i, &value) == ENP_ERROR_NONE && value)
-  //           {
-  //         return 1;
-  //       }
-  //     }
-  //   }
-  // }
-  return 0;
+  return ret;
 }

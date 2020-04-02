@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#define API_GET_NODE_NUM(_NODE_LIST_)                                          \
+#define GET_NODES_NUM(_NODE_LIST_)                                          \
   (sizeof(_NODE_LIST_) / sizeof((_NODE_LIST_)[0]))
 
 // Crc 16 calculate

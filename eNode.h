@@ -69,9 +69,9 @@ extern uint16_t ENP_NodeNum;
 void ENP_NodeListInit(const ENP_Node_t **nodelist, int maxnodenum);
 // Find node by id
 const ENP_Node_t *ENP_FindNode(uint16_t nodeid);
-// Insert node in the list
-uint16_t ENP_InsertNode(const ENP_Node_t *node, uint16_t num);
-// Delete node from the list
-uint16_t ENP_DeleteNode(const ENP_Node_t *node, uint16_t num);
+// Insert nodes in the list
+uint16_t ENP_InsertNodes(const ENP_Node_t *node, uint16_t num);
+// Delete nodes from the list
+uint16_t ENP_DeleteNodes(const ENP_Node_t *node, uint16_t num);
 
 #endif

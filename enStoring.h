@@ -6,62 +6,47 @@
 #include "eNode.h"
 #include "stdint.h"
 
-// Параметры конфигурации
-typedef struct {
-  uint32_t name;      // имя устройства
-  uint32_t code;      // код устройства
-  float hwVer;        // версия платы
-  float fwVer;        // версия программы
-  uint16_t netId;     // идентификатор сети
-  uint16_t devId;     // идентификатор устройства
-  uint32_t lang;      // язык конфигурации
-  uint16_t prescaler; // параметры шины CAN
-  uint16_t seg1;
-  uint16_t seg2;
-  uint16_t sjw;
-  uint32_t uart1Bps;             // параметры UART1
-  uint32_t uart2Bps;             // параметры UART2
-  uint32_t ckSum;                // контрольная сумма
-} ENP_Pars_t;
+//The number of variables in data chunk
+#define NUM_VARS_IN_CHUNK 30 
 
-// Параметры конфигурации
-extern ENP_Pars_t ENP_Pars;
+#define ENP_AssertParam(expr) ((expr) ? (void)0U : ENP_AssertFailed((uint8_t *)__FILE__, __LINE__))
 
-// Значения переменных узла конфигурации
+// Shared information
 typedef struct {
-  uint32_t ckSum;     // контрольная сумма
-  uint16_t nodeId;    // идентификатор узла
-  uint16_t varNum;    // кол-во переменных
-  uint32_t varVal[1]; // значение переменной
-} ENP_Vars_t;
+  uint32_t devId;     // device is
+  uint32_t fwUpdate;  // change firmware flag
+  uint32_t reserv1;
+  uint32_t reserv2;
+  uint32_t reserv3;
+  uint32_t reserv4;
+  uint32_t reserv5;
+  uint32_t ckSum;     // CRC32
+} ENP_ShareInformation_t;
 
-// Данные конфигурации (следить за выравниванием!)
+// variable in a memory
 typedef struct {
-  uint32_t fwUpdate; // флаг смены прошивки
-  ENP_Pars_t pars;   // параметры конфигурации
-  ENP_Vars_t vars;   // переменные конфигурации
-} ENP_Data_t;
+  uint16_t nodeId;
+  uint16_t varId;
+  uint32_t varValue; // value of the variable
+} ENP_SavedVar_t;
+
+typedef struct {
+    uint16_t numVars;
+    ENP_SavedVar_t data[NUM_VARS_IN_CHUNK];
+    uint32_t nextAddress;
+    uint32_t ckSum;     // checksum of the chunk
+} ENP_FlashDataChunk_t;
 
 // ENP flash interface
 uint8_t ENP_FlashErase(uint32_t startAddr, uint32_t stopAddr);
 uint8_t ENP_FlashWrite(void *dst, const void *ptr, int size);
 
-// Сохранение параметров конфигурации
-uint8_t ENP_SavePars(ENP_Data_t *data, uint32_t update);
+// Save nodes configuration
+uint8_t ENP_SaveNodes(void* pFlash);
+// Load node
+uint8_t ENP_LoadNode(void *pFlash, const ENP_Node_t *node);
 
-// Сохранение параметров конфигурации
-uint8_t ENP_LoadPars(ENP_Data_t *data);
-
-// Сохранение переменных узла конфигурации
-uint8_t ENP_SaveNode(ENP_Data_t *, const ENP_Node_t *, int nodenum);
-
-// Загрузка переменных узла конфигурации
-uint8_t ENP_LoadNode(ENP_Data_t *, const ENP_Node_t *, int nodenum);
-
-// Сохранение переменных конфигурации
-uint8_t ENP_Save(ENP_Data_t *data, uint32_t update);
-
-// Загрузка переменных конфигурации
-uint8_t ENP_Load(ENP_Data_t *data);
+// Assert
+void ENP_AssertFailed(uint8_t* file, uint32_t line);
 
 #endif

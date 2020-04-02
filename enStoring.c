@@ -1,22 +1,11 @@
 #include "enStoring.h"
+#include "string.h"
 
-// Параметры конфигурации
-ENP_Pars_t ENP_Pars = {
-    // имя устройства
-    ' ' + (' ' << 8) + (' ' << 16) + (' ' << 24),
-    0,   // код устройства
-    0.0, // версия платы
-    0.0, // версия программы
-    0,   // идентификатор сети
-    0,   // идентификатор устройства
-    0,   // язык
-    3,   // Параметры шины CAN
-    9,
-    2,
-    1,
-    115200, // параметры UART1
-    9600,   // параметры UART2
-    0};
+#define FLASH_ALIGN_LEN 256
+static uint8_t flashDataBuffer[FLASH_ALIGN_LEN];
+static ENP_FlashDataChunk_t dataChunk;
+
+static bool isNodeValid(const ENP_Node_t *node);
 
 __weak uint8_t ENP_FlashWrite(void *dst, const void *ptr, int size) {
   return 0;
@@ -26,164 +15,98 @@ __weak uint8_t ENP_FlashErase(uint32_t startAddr, uint32_t stopAddr) {
   return 0;
 }
 
-// Сохранение параметров конфигурации
-uint8_t ENP_SavePars(ENP_Data_t *data, uint32_t update) {
-  // сохраняем флаг смены прошивки
-  if (!ENP_FlashWrite ||
-      !ENP_FlashWrite(&update, &data->fwUpdate, sizeof(update))) {
-    return 0;
-  }
-  // вычисляем контрольную сумму параметров конфигурации
-  ENP_Pars.ckSum =
-      Crc16(&ENP_Pars, sizeof(ENP_Pars) - sizeof(uint32_t), 0xFFFF);
-  // сохраняем параметры конфигурации
-  if (!ENP_FlashWrite(&ENP_Pars, &data->pars, sizeof(ENP_Pars))) {
-    return 0;
-  }
-  return 1;
-}
+// Save nodes configuration
+uint8_t ENP_SaveNodes(void* pFlash) {
+  uint16_t prop;
+  ENP_SavedVar_t var;
+  uint32_t val;
+  static uint32_t ch = 0;
+  uint8_t* flashPtr = (uint8_t*)pFlash;
+  dataChunk.nextAddress = (uint32_t)(pFlash) + FLASH_ALIGN_LEN;
 
-// Загрузка параметров конфигурации
-uint8_t ENP_LoadPars(ENP_Data_t *data) {
-  // проверяем контрольную сумму
-  if (Crc16(&data->pars, sizeof(data->pars) - sizeof(uint32_t), 0xFFFF) ==
-      data->pars.ckSum) {
-    // загружаем параметры
-    ENP_Pars = data->pars;
-    return 1;
+  if (ENP_NodeList) {
+    ENP_FlashErase((uint32_t)flashPtr, (uint32_t)flashPtr);
+    for (int n = 0; n < ENP_NodeNum; n++) {
+      // Calculation of the number of the stored parameters
+      const ENP_Node_t* node = ENP_NodeList[n];
+      if (isNodeValid(node)) {
+        for (int i = 0; i < node->varNum; i++) {
+          prop = node->varAttr[i].prop;
+          if (prop & ENP_PROP_CONST) {
+            node->VarGetVal(node->id, i, &val);
+            var.nodeId = node->id;
+            var.varId = i;
+            var.varValue = val;
+            dataChunk.data[ch] = var;
+            ch++;
+            if (ch >= NUM_VARS_IN_CHUNK) {
+              dataChunk.numVars = NUM_VARS_IN_CHUNK;
+              uint32_t crcSize = sizeof(dataChunk) - sizeof(dataChunk.ckSum);
+              dataChunk.ckSum = Crc32(&dataChunk, crcSize, 0xFFFFFFFF);
+              ENP_AssertParam(sizeof(flashDataBuffer) >= sizeof(dataChunk));
+              memcpy(flashDataBuffer, &dataChunk, sizeof(dataChunk));
+              ENP_FlashWrite(flashPtr, flashDataBuffer,
+                             sizeof(flashDataBuffer));
+              flashPtr += FLASH_ALIGN_LEN;
+              dataChunk.nextAddress = (uint32_t)flashPtr + FLASH_ALIGN_LEN;
+              ch = 0;
+            }
+          }
+        }
+      }
+    }
+    // Save remaining data
+    dataChunk.numVars = ch;
+    dataChunk.nextAddress = 0;
+    uint32_t crcSize = sizeof(dataChunk) - sizeof(dataChunk.ckSum);
+    dataChunk.ckSum = Crc32(&dataChunk, crcSize, 0xFFFFFFFF);
+    ENP_AssertParam(sizeof(flashDataBuffer) >= sizeof(dataChunk));
+    memcpy(flashDataBuffer, &dataChunk, sizeof(dataChunk));
+    ENP_FlashWrite(flashPtr, flashDataBuffer, sizeof(flashDataBuffer));
   }
   return 0;
 }
 
-// Сохранение переменных узла конфигурации
-uint8_t ENP_SaveNode(ENP_Data_t *data, const ENP_Node_t *node, int nodenum) {
-  // ENP_Vars_t *vars;
-  // uint16_t prop, k;
-  // uint32_t val;
-  // int i, n;
+// Load node
+uint8_t ENP_LoadNode(void *pFlash, const ENP_Node_t *node) {
+  ENP_FlashDataChunk_t *chunk = (ENP_FlashDataChunk_t *)pFlash;
 
-  // // проверяем указатель на функцию записи
-  // if (!ENP_FlashWrite) {
-  //   return 0;
-  // }
-  // // ищем последнюю запись
-  // vars = &data->vars;
-  // while (vars->nodeId < 0xFFFF && vars->varNum < 0xFFFF) {
-  //   vars =
-  //       (ENP_Vars_t *)((char *)vars + ((vars->varNum << 2) + 8) /
-  //       sizeof(char));
-  // }
-  // // для всех узлов
-  // for (n = 0; n < nodenum; n++, node++) {
-  //   if (node->VarGetAttr && node->VarGetVal) {
-  //     // вычисляем кол-во сохраняемых переменных
-  //     for (k = i = 0; i < node->varNum; i++)
-  //       if (node->VarGetAttr(node->id, i, 0, &prop) == ENP_ERROR_NONE &&
-  //           (prop & ENP_PROP_CONST))
-  //         k++;
-  //     if (k) {
-  //       // сохраняем переменные
-  //       for (k = i = 0; i < node->varNum; i++)
-  //         if (node->VarGetAttr(node->id, i, 0, &prop) == ENP_ERROR_NONE &&
-  //             (prop & ENP_PROP_CONST) &&
-  //             node->VarGetVal(node->id, i, &val) == ENP_ERROR_NONE &&
-  //             !ENP_FlashWrite(&val, &vars->varVal[k++], sizeof(uint32_t)))
-  //           return 0;
-  //       // сохраняем кол-во переменных
-  //       if (!ENP_FlashWrite(&k, &vars->varNum, sizeof(node->varNum))) {
-  //         return 0;
-  //       }
-  //       // вычисляем контрольную сумму
-  //       val = Crc16(&vars->nodeId, (k << 2) + 4, 0xFFFF);
-  //       // сохраняем контрольную сумму
-  //       if (!ENP_FlashWrite(&val, &vars->ckSum, sizeof(val))) {
-  //         return 0;
-  //       }
-  //       // переходим к следующей записи
-  //       vars = (ENP_Vars_t *)((char *)vars + ((k << 2) + 8) / sizeof(char));
-  //     }
-  //   }
-  // }
-  return 1;
-}
-
-// Загрузка переменных узла конфигурации
-uint8_t ENP_LoadNode(ENP_Data_t *data, const ENP_Node_t *node, int nodenum) {
-  // ENP_Vars_t *vars;
-  // uint16_t i, n, k;
-  int res = 1;
-
-  // for (n = 0; n < nodenum; n++, node++) {
-  //   if (node->VarGetAttr && node->VarSetVal) {
-  //     // вычисляем кол-во загружаемых переменных
-  //     for (k = i = 0; i < node->varNum; i++) {
-  //       // if (node->VarGetAttr(node->id, i, 0, &prop) == ENP_ERROR_NONE &&
-  //       //     (prop & ENP_PROP_CONST)) {
-  //       //   k++;
-  //       // }
-  //     }
-  //     if (k) {
-  //       // ищем запись
-  //       vars = &data->vars;
-  //       while (vars->nodeId < 0xFFFF && vars->varNum < 0xFFFF &&
-  //              vars->nodeId != node->id) {
-  //         vars = (ENP_Vars_t *)((char *)vars +
-  //                               ((vars->varNum << 2) + 8) / sizeof(char));
-  //       }
-
-  //       if (vars->nodeId == node->id && k == vars->varNum) {
-  //         // загружаем переменные
-  //         // for (k = i = 0; i < node->varNum; i++) {
-  //         //   if (node->VarGetAttr(node->id, i, 0, &prop) == ENP_ERROR_NONE
-  //         &&
-  //         //       (prop & ENP_PROP_CONST) &&
-  //         //       node->VarSetVal(node->id, i, &vars->varVal[k++]) !=
-  //         //           ENP_ERROR_NONE) {
-  //         //     res = 0;
-  //         //   }
-  //         // }
-  //       } else
-  //         res = 0;
-  //     }
-  //   }
-  // }
-  return res;
-}
-
-// Сохранение переменных конфигурации
-uint8_t ENP_Save(ENP_Data_t *data, uint32_t update) {
-  int n;
-
-  if (!ENP_NodeList) {
-    return 0;
-  }
-  // стираем flash
-  if (!ENP_FlashErase || !ENP_FlashErase((uint32_t)data, (uint32_t)data)) {
-    return 0;
-  }
-  // сохраняем параметры конфигурации
-  if (!ENP_SavePars(data, update)) {
-    return 0;
-  }
-  for (n = 0; n < ENP_NodeNum; n++) {
-    if (!ENP_SaveNode(data, ENP_NodeList[n], 1)) {
-      return 0;
-    }
-  }
-  return 1;
-}
-
-// Загрузка переменных конфигурации
-uint8_t ENP_Load(ENP_Data_t *data) {
-  int n, res = 1;
-
-  if (ENP_NodeList) {
-    for (n = 0; n < ENP_NodeNum; n++) {
-      if (!ENP_LoadNode(data, ENP_NodeList[n], 1)) {
-        res = 0;
+  if (isNodeValid(node) && node) {
+    // Search a data in the linked list
+    while (chunk != 0) {
+      uint32_t crcSize = sizeof(dataChunk) - sizeof(dataChunk.ckSum);
+      uint32_t crc = Crc32(chunk, crcSize, 0xFFFFFFFF);
+      if (crc == chunk->ckSum) {
+        for (int i = 0; i < chunk->numVars; i++) {
+          // in flash memory stored only CONST type data
+          if (chunk->data[i].nodeId == node->id) {
+            uint16_t varId = chunk->data[i].varId;
+            uint32_t value = chunk->data[i].varValue;
+            node->VarSetVal(node->id, varId, &value);
+          }
+        }
+        chunk = (ENP_FlashDataChunk_t *)chunk->nextAddress;
+      } else {
+        return 1; // bad config
       }
     }
-    return res;
-  } else
-    return 0;
+  }
+  return 0;
+}
+
+// true - node is valid
+static bool isNodeValid(const ENP_Node_t *node) {
+  bool ret = true;
+  if (node->VarGetVal && node->VarSetVal && node) {
+    ret = true;
+  } else {
+    ret = false;
+  }
+  return ret;
+}
+
+// Assert
+void ENP_AssertFailed(uint8_t* file, uint32_t line) {
+  for (;;) {
+  }
 }

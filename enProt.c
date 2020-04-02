@@ -15,7 +15,7 @@ static void Write32(uint8_t *buf, uint32_t value);
 
 // Handler intialization
 void ENP_InitHandle(ENP_Handle_t *handle, uint16_t devId1, uint16_t devId2,
-                    int (*txf)(const char *, int)) {
+                    int (*txf)(const void *, int)) {
   handle->txLen = 0;
   handle->TxFun = txf;
   handle->devId1 = devId1;

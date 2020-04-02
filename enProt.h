@@ -3,8 +3,8 @@
  ****************************************************************************/
 #ifndef ENPROT_H_
 #define ENPROT_H_
-#include "enpHelper.h"
 #include "eNode.h"
+#include "enpHelper.h"
 #include "stdbool.h"
 #include "stdint.h"
 
@@ -57,7 +57,7 @@ typedef struct {
 typedef struct {
   char txBuf[ENP_BUFFSIZE];
   int txLen;
-  int (*TxFun)(const char *, int);
+  int (*TxFun)(const void *, int);
   uint16_t devId1;
   uint16_t devId2;
   enpFrame_t rxFrame;
@@ -68,7 +68,7 @@ typedef struct {
 
 // Handle init
 void ENP_InitHandle(ENP_Handle_t *, uint16_t, uint16_t,
-                    int (*txf)(const char *, int));
+                    int (*txf)(const void *, int));
 // Frame parser
 bool ENP_ParseFrame(ENP_Handle_t *handle, uint8_t *data, uint32_t len);
 // Answer
