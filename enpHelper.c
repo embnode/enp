@@ -1,9 +1,9 @@
 /****************************************************************************
  *                      Embedded node protocol(ENP)                         *
  ****************************************************************************/
-#include "enpapi.h"
+#include "enpHelper.h"
 
-// Таблица стандартного CRC-16 (ARC)
+// CRC-16 table (ARC)
 static const uint16_t CRC16_Table[256] = {
     0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241, 0xC601,
     0x06C0, 0x0780, 0xC741, 0x0500, 0xC5C1, 0xC481, 0x0440, 0xCC01, 0x0CC0,
@@ -35,7 +35,7 @@ static const uint16_t CRC16_Table[256] = {
     0x4540, 0x8701, 0x47C0, 0x4680, 0x8641, 0x8201, 0x42C0, 0x4380, 0x8341,
     0x4100, 0x81C1, 0x8081, 0x4040};
 
-// Таблица стандартного CRC-32 (ARC)
+// CRC-32 table (ARC)
 static const uint32_t CRC32_Table[256] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
     0xe963a535, 0x9e6495a3, 0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988,
@@ -81,36 +81,20 @@ static const uint32_t CRC32_Table[256] = {
     0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
     0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d};
 
-// Вычисление стандартного CRC-16 (ARC)
-// ------------------------------------
-uint16_t CRC16(const void *data, uint32_t size, uint16_t crc, int charsize) {
-  const char *ptr = data;
+__weak uint16_t Crc16(const void *data, uint32_t size, uint16_t crc) {
+  const uint8_t *ptr = data;
 
-  if (charsize <= 1)
-    for (; size--; ptr++) {
-      crc = (crc >> 8) ^ CRC16_Table[(crc ^ *ptr) & 0xFF];
-    }
-  else
-    for (; size--; ptr++) {
-      crc = (crc >> 8) ^ CRC16_Table[(crc ^ *ptr) & 0xFF];
-      crc = (crc >> 8) ^ CRC16_Table[(crc ^ (*ptr >> 8)) & 0xFF];
-    }
+  for (; size--; ptr++) {
+    crc = (crc >> 8) ^ CRC16_Table[(crc ^ *ptr) & 0xFF];
+  }
   return crc;
 }
 
-// Вычисление стандартного CRC-32 (ARC)
-// ------------------------------------
-uint32_t CRC32(const void *data, uint32_t size, uint32_t crc, int charsize) {
-  const char *ptr = data;
+__weak uint32_t Crc32(const void *data, uint32_t size, uint32_t crc) {
+  const uint8_t *ptr = data;
 
-  if (charsize <= 1)
-    for (; size--; ptr++) {
-      crc = (crc >> 8) ^ CRC32_Table[(crc ^ *ptr) & 0xFF];
-    }
-  else
-    for (; size--; ptr++) {
-      crc = (crc >> 8) ^ CRC32_Table[(crc ^ *ptr) & 0xFF];
-      crc = (crc >> 8) ^ CRC32_Table[(crc ^ (*ptr >> 8)) & 0xFF];
-    }
+  for (; size--; ptr++) {
+    crc = (crc >> 8) ^ CRC32_Table[(crc ^ *ptr) & 0xFF];
+  }
   return crc;
 }
