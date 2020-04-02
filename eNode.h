@@ -15,6 +15,9 @@
 #endif /* __packed */
 #endif /* __GNUC__ */
 
+#define ENP_MAJOR_VER 1
+#define ENP_MINOR_VER 1
+
 // Configuarion error codes
 #define ENP_ERROR_NONE 0
 #define ENP_ERROR_NODENUM 1 // node number error
