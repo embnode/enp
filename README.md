@@ -1,6 +1,6 @@
 # Embedded node protocol library
 General purpose this library is create user interface from Embedded aplication.  
-You create nodes in your application and Embedded Node Configurator will be able to show it for usergit.  
+You create nodes in your application and Embedded Node Configurator will be able to show it for user.  
 The structure of nodes is completely formed in your project.  
 You can download the Configurator [here](https://github.com/embnode/ENConfigurator/releases/).  
 The lastest library version you can find on [release page](https://github.com/embnode/enp/releases).  
