@@ -17,6 +17,7 @@
 
 #define ENP_MAJOR_VER 1
 #define ENP_MINOR_VER 1
+#define ENP_SUB_VER 0
 
 // Configuarion error codes
 #define ENP_ERROR_NONE 0
